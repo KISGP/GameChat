@@ -1,0 +1,25 @@
+{
+  "name": "@gamechat/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "壳无关业务核心与 adapter 接口：聊天运行时、设置引擎、world 检索、基础设施原语。",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@gamechat/schema": "*",
+    "@gamechat/type": "*",
+    "@langchain/anthropic": "^1.5.10",
+    "@langchain/core": "^1.2.10",
+    "@langchain/langgraph": "^1.3.2",
+    "@langchain/openai": "^1.4.7",
+    "minisearch": "^7.2.0",
+    "openai": "^6.39.1",
+    "sharp": "^0.35.4",
+    "write-file-atomic": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/write-file-atomic": "^4.0.3"
+  }
+}

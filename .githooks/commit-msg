@@ -1,0 +1,163 @@
+#!/usr/bin/env node
+/**
+ * @description commit-msg 钩子：机械校验提交信息格式与 release 提交的版本一致性，规则与 AGENTS.md 提交消息节一致。
+ * @remarks 经根 package.json 的 prepare 脚本配置 core.hooksPath 后由 git 调用，参数为提交信息文件路径。
+ *   格式校验覆盖全部提交；release 提交追加版本校验：scope 必须为 <应用名>/v<版本号>，与暂存的
+ *   apps/<应用名>/package.json、package-lock.json 三方一致，且严格大于 HEAD 中的上一版本。
+ *   版本三方比对一律读暂存区内容而非工作区文件；merge、revert、fixup、squash 等自动提交信息豁免。
+ */
+'use strict';
+
+const { execFileSync } = require('node:child_process');
+const { readFileSync } = require('node:fs');
+const { compareVersions, parseVersion } = require('./semver.cjs');
+
+/**
+ * @description 允许的 type 清单。
+ */
+const COMMIT_TYPES = new Set(['feat', 'fix', 'docs', 'refactor', 'test', 'chore', 'release']);
+
+/**
+ * @description lockfile 在仓库内的路径。
+ */
+const LOCK_PATH = 'package-lock.json';
+
+/**
+ * @description 输出错误信息并以退出码 1 拒绝本次提交。
+ * @param {string} message - 面向提交者的中文错误说明。
+ * @returns {never} 进程随即终止，无返回。
+ */
+function fail(message) {
+  console.error(`commit-msg：${message}`);
+  process.exit(1);
+}
+
+/**
+ * @description 读取仓库对象数据库中「修订:路径」指向的文件内容。
+ * @param {string} spec - git 对象表达式，如 `:apps/wuwachat/package.json`（暂存区）或 `HEAD:apps/wuwachat/package.json`（上一提交）。
+ * @returns {string | null} 文件内容；对象不存在（如仓库尚无提交）时返回 null。
+ */
+function gitShowFile(spec) {
+  try {
+    return execFileSync('git', ['show', spec], { encoding: 'utf8' });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @description 从暂存区读取 JSON 文件并解析。
+ * @param {string} path - 仓库内路径。
+ * @param {string} missingHint - 文件缺失时错误信息里给出的补救提示。
+ * @returns {object} 解析后的 JSON 对象；解析失败或文件缺失时终止提交。
+ */
+function readStagedJson(path, missingHint) {
+  const raw = gitShowFile(`:${path}`);
+  if (raw === null) {
+    fail(`暂存区中不存在 ${path}，${missingHint}`);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    fail(`${path} 不是合法 JSON：${error.message}`);
+  }
+}
+
+/**
+ * @description 校验 release 提交的版本：scope 必须为 <应用名>/v<版本号>，与暂存的应用 package.json、lockfile 三方一致，且严格大于 HEAD 中的上一版本。
+ * @param {string} scope - 提交信息中的 scope 段。
+ * @returns {void} 校验通过时无副作用；任一条件不满足时终止提交。
+ */
+function checkReleaseVersion(scope) {
+  const match = /^([a-z0-9-]+)\/v(.+)$/.exec(scope);
+  if (match === null) {
+    fail('release 提交的 scope 必须是 <应用名>/v<版本号>（如 release(wuwachat/v0.2.0): 发布新版本）');
+  }
+  const [, app, version] = match;
+  try {
+    parseVersion(version);
+  } catch (error) {
+    fail(`release 提交 scope 中的版本号不合法：${error.message}`);
+  }
+
+  const appPackagePath = `apps/${app}/package.json`;
+
+  const appPackage = readStagedJson(appPackagePath, '版本号更新必须一并暂存');
+  const stagedVersion = typeof appPackage.version === 'string' ? appPackage.version : '';
+  if (stagedVersion !== version) {
+    fail(`版本不一致：提交信息为 v${version}，暂存的 ${appPackagePath} 为 ${stagedVersion || '（缺失）'}`);
+  }
+
+  const lock = readStagedJson(LOCK_PATH, '请先运行 npm install 同步 lockfile 再提交');
+  const lockEntry = lock.packages === undefined ? undefined : lock.packages[`apps/${app}`];
+  const lockVersion = lockEntry !== undefined && typeof lockEntry.version === 'string' ? lockEntry.version : '';
+  if (lockVersion !== version) {
+    fail(`版本不一致：提交信息为 v${version}，暂存的 ${LOCK_PATH} 为 ${lockVersion || '（缺失）'}`);
+  }
+
+  const previousRaw = gitShowFile(`HEAD:${appPackagePath}`);
+  if (previousRaw === null) {
+    // 仓库还没有任何提交时没有比较基准，跳过递增校验。
+    return;
+  }
+  let previousVersion;
+  try {
+    previousVersion = JSON.parse(previousRaw).version;
+  } catch (error) {
+    fail(`HEAD 中的 ${appPackagePath} 不是合法 JSON，无法比较版本：${error.message}`);
+  }
+  try {
+    if (compareVersions(previousVersion, version) >= 0) {
+      fail(`新版本 v${version} 必须严格大于上一版本 v${previousVersion}，release 提交必须携带版本号更新`);
+    }
+  } catch (error) {
+    fail(`版本比较失败：${error.message}`);
+  }
+}
+
+/**
+ * @description 校验入口：先豁免 git 生成的自动提交信息，再校验全部提交的格式，release 提交追加版本校验。
+ * @returns {void} 校验通过时静默退出；失败时以非零退出码拒绝提交。
+ */
+function main() {
+  const messagePath = process.argv[2];
+  if (messagePath === undefined) {
+    fail('缺少提交信息文件参数');
+  }
+
+  const message = readFileSync(messagePath, 'utf8');
+  // 提交信息文件可能带编辑器注释与空行，主题取首个非注释且非空的行。
+  const subject = message
+    .split(/\r?\n/)
+    .find((line) => line.trim() !== '' && !line.startsWith('#'));
+  if (subject === undefined) {
+    fail('提交信息为空');
+  }
+
+  // git merge、revert 等生成的自动提交信息不经人工编辑，豁免格式校验。
+  if (/^(?:Merge |Revert |fixup! |squash! )/.test(subject)) {
+    return;
+  }
+
+  const match = /^([a-z]+)\(([^()]+)\): (.+)$/.exec(subject);
+  if (match === null) {
+    fail(`提交信息必须是 <type>(<scope>): <subject> 格式：${subject}`);
+  }
+
+  const [, type, scope, body] = match;
+  if (!COMMIT_TYPES.has(type)) {
+    fail(`未知 type「${type}」，允许：${[...COMMIT_TYPES].join('、')}`);
+  }
+  if (!/[\u4e00-\u9fff]/.test(body)) {
+    fail('subject 必须使用中文描述');
+  }
+  if (/[。.]$/.test(body)) {
+    fail('subject 不以句号结尾');
+  }
+
+  if (type === 'release') {
+    checkReleaseVersion(scope);
+  }
+}
+
+main();

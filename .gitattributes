@@ -1,0 +1,2 @@
+# 钩子由 sh 读取 shebang 启动解释器，检出换行必须保持 LF，CRLF 会让 shebang 行尾带 \r 而找不到 node。
+.githooks/** text eol=lf

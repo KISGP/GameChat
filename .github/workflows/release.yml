@@ -1,0 +1,195 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# 同一分支的发版运行串行排队，避免连续推送产生多个 Release 时竞争 latest 标记。
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Resolve Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # 只在头提交信息以 release 开头时推进；chore 等普通提交推送 main 不触发打包。
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release')
+    outputs:
+      should-release: ${{ steps.resolve.outputs.should-release }}
+      app: ${{ steps.resolve.outputs.app }}
+      app-version: ${{ steps.resolve.outputs.app-version }}
+      release-tag: ${{ steps.resolve.outputs.release-tag }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          # 严格递增校验要读上一提交中的版本号，浅克隆两层才够。
+          fetch-depth: 2
+
+      - name: Resolve Release Version
+        id: resolve
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 校验规则与本地 commit-msg 钩子（.githooks/）同源：release 提交主题为
+          # release(<应用名>/v<版本号>): <中文主题>，版本号与应用 package.json、lockfile 三方一致且严格递增。
+          subject=$(git log -1 --pretty=%s)
+          parsed=$(printf '%s' "$subject" | sed -n 's/^release(\([a-z0-9-]*\)\/v\([^)]*\)): .*/\1 \2/p')
+          if [ -z "$parsed" ]; then
+            echo "Head commit is not a release commit: $subject"
+            exit 1
+          fi
+          app=${parsed%% *}
+          version=${parsed##* }
+
+          version_in_repo=$(node -p "require('./apps/$app/package.json').version")
+          lock_version=$(node -p "require('./package-lock.json').packages['apps/$app'].version")
+
+          if [ "$version" != "$version_in_repo" ] || [ "$version" != "$lock_version" ]; then
+            echo "Version mismatch: commit $app/v$version, package.json $version_in_repo, lockfile $lock_version"
+            exit 1
+          fi
+
+          previous_version=$(git show "HEAD^:apps/$app/package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version" || true)
+          if [ -n "$previous_version" ]; then
+            comparison=$(node .githooks/semver.cjs compare "$previous_version" "$version") || {
+              echo "Invalid version: previous=$previous_version current=$version"
+              exit 1
+            }
+            if [ "$comparison" != "-1" ]; then
+              echo "Version must strictly increase: previous=$previous_version current=$version"
+              exit 1
+            fi
+          fi
+
+          tag="$app-v$version"
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "app-version=$version" >> "$GITHUB_OUTPUT"
+          echo "release-tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if gh api "repos/${{ github.repository }}/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "should-release=false" >> "$GITHUB_OUTPUT"
+            echo "Release tag already exists: $tag, skipping."
+            {
+              echo '### 跳过发版'
+              echo "标签 $tag 已存在；提交版本号更高的 release 提交到 main 即会发布新版本。"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "should-release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: Build and Publish
+    needs: prepare
+    if: needs.prepare.outputs.should-release == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    env:
+      APP: ${{ needs.prepare.outputs.app }}
+      APP_VERSION: ${{ needs.prepare.outputs.app-version }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.release-tag }}
+      # .npmrc 的镜像源面向境内开发机；海外 runner 直连官方源更快，并避免镜像偶发不可达。
+      ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+      ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Electron 二进制与 NSIS 工具链不在 npm 缓存范围内，单独按锁文件哈希缓存。
+      - name: Cache Electron Binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron
+            ~\AppData\Local\electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Type Check
+        run: npm run typecheck
+
+      - name: Build App
+        working-directory: apps/${{ needs.prepare.outputs.app }}
+        run: npm run build
+
+      - name: Build Windows Package
+        working-directory: apps/${{ needs.prepare.outputs.app }}
+        run: npx electron-builder --win --publish never
+
+      # 构建成功后才创建 Release，tag 随 Release 由服务端落盘；构建失败时不会残留新 tag，直接重跑即可。
+      # 创建做幂等处理：上传失败的 re-run 从本步骤继续推进，不会因 Release 已存在而卡死。
+      # 预发布版本（版本号含 -）标记 prerelease，不进入 releases/latest，避免 beta 经更新链推给正式用户。
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release already exists, skipping creation."
+          else
+            prerelease_flag=""
+            case "$APP_VERSION" in
+              *-*) prerelease_flag="--prerelease" ;;
+            esac
+            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TAG" --generate-notes $prerelease_flag
+          fi
+
+      - name: Upload Release Assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd "apps/$APP/dist"
+
+          # 上传清单以 latest.yml 声明的更新链为准：更新器从 releases/latest/download/ 按
+          # yml 内的 url 逐字拉取，资产名必须与 url 完全一致；blockmap 不在 yml 文件清单里，
+          # 由更新器按「安装包 url + .blockmap」约定拉取，这里逐个安装包补齐。
+          mapfile -t urls < <(sed -n 's/^[[:space:]]*-[[:space:]]*url:[[:space:]]*//p' latest.yml)
+          if [ "${#urls[@]}" -eq 0 ]; then
+            echo "latest.yml declares no update files" >&2
+            exit 1
+          fi
+
+          upload=(latest.yml)
+          has_exe=false
+          for url in "${urls[@]}"; do
+            if [ ! -f "$url" ]; then
+              echo "Expected release asset not found: $url" >&2
+              exit 1
+            fi
+            upload+=("$url")
+            case "$url" in
+              *.exe)
+                has_exe=true
+                blockmap="$url.blockmap"
+                if [ ! -f "$blockmap" ]; then
+                  echo "Differential update index not found: $blockmap" >&2
+                  exit 1
+                fi
+                upload+=("$blockmap")
+                ;;
+            esac
+          done
+
+          if [ "$has_exe" = false ]; then
+            echo "No installer declared in latest.yml" >&2
+            exit 1
+          fi
+
+          gh release upload "$RELEASE_TAG" "${upload[@]}" --repo "${{ github.repository }}" --clobber

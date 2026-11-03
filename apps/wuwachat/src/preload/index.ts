@@ -1,0 +1,1 @@
+import '@gamechat/electron/preload'

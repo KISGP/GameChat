@@ -1,0 +1,13 @@
+{
+  "name": "@gamechat/schema",
+  "version": "0.1.0",
+  "private": true,
+  "description": "设置与运行时的数据契约：默认值、规范化工厂与选项清单，引用的类型定义在 @gamechat/type。",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@gamechat/type": "*"
+  }
+}

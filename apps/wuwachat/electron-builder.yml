@@ -1,0 +1,36 @@
+# WuWaChat 打包配置：产物形态由本应用声明，标准主进程只消费。
+# appId 必须与 src/main/index.ts 的 startChatAppMain appId 一致（AUMI 与系统通知归属）。
+appId: com.wuwachat
+productName: WuWaChat
+
+directories:
+  output: dist
+
+# 产物名必须无空格：GitHub Release 资产的下载地址会改写空格，更新器按
+# latest.yml 内的 url 逐字拉取，带空格的产物名会让更新链 404。
+artifactName: ${productName}-${version}-setup.${ext}
+
+# 只收构建产物与内置资源；src/配置/测试不进包。生产依赖由 electron-builder
+# 按 package.json 自动收集——main/preload 外置的裸导入（electron-updater、LangChain 等）
+# 运行时经 node_modules 解析，因此不能排除 node_modules。
+files:
+  - out/**/*
+  - resources/**/*
+
+win:
+  icon: resources/icon.ico
+  target:
+    - nsis
+
+# 更新器运行时读取的来源声明（resources/app-update.yml）由本段生成；本地打包不携带
+# 发布动作，产物仍只落 dist/。
+publish:
+  - provider: generic
+    url: https://github.com/KISGP/GameChat/releases/latest/download/
+
+# 兑现 getBundledResourcesRoot() 的打包态路径：图标与内置表情从 app.asar.unpacked/resources 读取。
+asarUnpack:
+  - resources/**/*
+
+# 无原生依赖，跳过 rebuild。
+npmRebuild: false

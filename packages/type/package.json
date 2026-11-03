@@ -1,0 +1,11 @@
+{
+  "name": "@gamechat/type",
+  "version": "0.1.0",
+  "private": true,
+  "description": "跨进程共享词汇：主进程与渲染层之间的纯类型合同，零 Node 依赖、浏览器安全。",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {}
+}

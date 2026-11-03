@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": [],
+    "strict": true,
+    "noImplicitAny": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@renderer/*": ["./src/renderer/*"],
+      "@gamechat/electron/shared/*": ["../../packages/electron/src/shared/*"],
+      "@gamechat/schema": ["../../packages/schema/src/index.ts"],
+      "@gamechat/type": ["../../packages/type/src/index.ts"],
+      "@gamechat/core": ["../../packages/core/src/index.ts"],
+      "@gamechat/core/*": ["../../packages/core/src/*"]
+    }
+  },
+  "include": ["src/renderer", "src/agent-lab", "../../packages/electron/src/preload/index.d.ts"]
+}

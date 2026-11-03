@@ -1,0 +1,28 @@
+{
+  "name": "@gamechat/electron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron 实现层：壳原语（主窗口、托盘、IPC 总线、updater）与标准聊天应用主进程（域服务、IPC 通道、preload 桥），应用只需提供 renderer 与身份配置。",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^4.0.0",
+    "@gamechat/core": "*",
+    "@gamechat/schema": "*",
+    "@gamechat/type": "*",
+    "electron-updater": "^6.3.9"
+  },
+  "peerDependencies": {
+    "electron": "^42.3.0"
+  },
+  "devDependencies": {
+    "@langfuse/core": "^5.14.0",
+    "@langfuse/langchain": "^5.14.0",
+    "@langfuse/otel": "^5.14.0",
+    "@langfuse/tracing": "^5.14.0",
+    "@opentelemetry/sdk-node": "^0.222.0",
+    "electron": "^42.3.0"
+  }
+}

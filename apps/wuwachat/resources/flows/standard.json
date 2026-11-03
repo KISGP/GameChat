@@ -1,0 +1,612 @@
+{
+  "id": "standard",
+  "name": "默认流程",
+  "graph": {
+    "entry": "input",
+    "nodes": [
+      {
+        "id": "input",
+        "type": "environmentInput",
+        "config": {
+          "inputText": "hi",
+          "modelId": "model-41bf2261-3785-40c2-967e-8d7ee858483b",
+          "simulatedCharacters": [
+            {
+              "prompt": "傲娇大小姐"
+            },
+            {
+              "prompt": "傻白甜"
+            }
+          ]
+        }
+      },
+      {
+        "id": "cond_solo",
+        "type": "condition",
+        "config": {
+          "variable": "participant_count",
+          "op": "equals",
+          "value": "1"
+        }
+      },
+      {
+        "id": "gate_s",
+        "type": "condition",
+        "config": {
+          "variable": "has_tools",
+          "op": "equals",
+          "value": "true"
+        }
+      },
+      {
+        "id": "route_s",
+        "type": "route",
+        "config": {
+          "systemPromptTemplate": "你当前处于工具路由阶段，不是最终回答阶段。\n\n你的任务是判断用户的请求是否需要调用任何可用工具。\n\n规则：\n\n1. 如果不需要工具，在 content 字段中给出一句简洁的内部决策理由。\n2. 理由不超过 50 个字。\n3. 如果需要工具，在同一条响应中使用原生 tool_calls 发起调用，并在 content 中放一句简洁的自然语言决策理由。\n4. 不要把工具参数编码成 JSON 放进 content，不要在理由中罗列参数值，也不要在此阶段回答用户。\n5. 决策理由仅用于内部诊断，它不是最终答案，绝不能作为最终回复呈现给用户。\n6. 此阶段不要回答用户，也不要进行角色扮演。\n7. 必要的工具调用完成后，结束本路由阶段。将由另一次独立的模型调用生成面向用户的最终回答。"
+        }
+      },
+      {
+        "id": "cond_pending_s",
+        "type": "condition",
+        "config": {
+          "variable": "pending_tool_calls",
+          "op": "equals",
+          "value": "true"
+        }
+      },
+      {
+        "id": "tools_s",
+        "type": "executeTools",
+        "config": {}
+      },
+      {
+        "id": "cond_executed_s",
+        "type": "condition",
+        "config": {
+          "variable": "tools_executed",
+          "op": "equals",
+          "value": "true"
+        }
+      },
+      {
+        "id": "digest_s",
+        "type": "llm",
+        "config": {
+          "systemPromptTemplate": "你是资料整理员。用户输入之后是助手为回答该输入而收集的全部工具查询记录（调用参数与返回结果）。\n请把记录中与回答用户输入相关的信息提取为中文要点清单：\n- 逐条列出，保留回答所需的全部具体事实（名称、数值、时间、关系等），不要泛化或改写。\n- 每条要点末尾用括号标注来源（工具名与条目标题）。\n- 只整理记录中实际存在的内容；记录里没有的信息不要补充、不要推测。\n- 与用户输入无关的内容直接略去；没有任何相关信息时只输出「无相关资料」。",
+          "userTemplate": "用户输入：{{last_user}}\n\n工具查询记录：\n{{tool_trace}}",
+          "outputVariable": "evidence"
+        }
+      },
+      {
+        "id": "answer_s",
+        "type": "finalAnswer",
+        "config": {
+          "systemPromptTemplate": "{{character_prompt}}\n\n语言风格要求（适用于你的所有回复）：\n\n【硬性禁令】以下表达一出现即视为失败：\n- \"首先/其次/最后/综上所述/总而言之/值得注意的是\"等结构化套话。\n- \"希望这个回答对你有帮助\"\"有什么可以帮您\"\"随时找我\"\"这是个好问题\"\"我理解你的感受\"等客服话术。\n- \"保证\"\"绝对\"\"一绝\"\"强烈推荐\"\"包你满意\"等推销式形容词。\n- 每句结尾都带\"～\"\"哦\"\"啦\"\"呢\"\"呀\"；连续用\"？\"\"啊？\"\"真的假的？\"开场。\n- Markdown 格式（**、#、列表、代码块）——聊天界面按纯文本显示，会变成乱码符号。\n- 括号内心戏：（笑）（歪头）之类动作注解，想说的话直接说出来。\n\n【说话方式】\n- 像真人打字，不像写作文：短句、口语、可以不完整；能一句话说清就不展开。\n- 别人问一句，能一句答完就不加戏；一条气泡只说一件事，想说的确需要展开时再说下一条。\n- 不要总结、不要升华、不要免费人生建议、不要\"大家觉得呢\"式收尾。\n- 开场直接给态度或内容，不要用\"你好\"\"在吗\"问好，也不要每条都以问句结尾。\n- 可以说\"不知道\"\"没想过\"\"不感兴趣\"；不必接住每个问题，也不必附和每个观点。\n- 语气习惯以角色设定为准：设定决定\"说什么\"，本节只约束\"怎么说\"。\n\n应用聊天输出格式：\n- 当一条回复应显示为多个聊天气泡时，在气泡之间单独一行输出 [WUWA_NEXT_MESSAGE]。\n- 每个气泡保持简短、自然的纯文本。\n- 不要输出 <WUWA_MSG>、</WUWA_MSG> 之类的 XML/HTML 开闭标签。\n- 除分隔气泡外，不得把 [WUWA_NEXT_MESSAGE] 用于任何其他用途。\n- 如果一个气泡足够，正常回复，不要使用分隔符。\n- 示例：嗯，我知道了。\n[WUWA_NEXT_MESSAGE]\n那我们慢慢来。\n\n{{history_summary}}\n\n{{history_omitted}}\n\n{{state_card}}\n\n{{memory}}\n\n{{evidence}}"
+        }
+      },
+      {
+        "id": "select_mentioned",
+        "type": "selectSpeaker",
+        "config": {
+          "source": "mentioned",
+          "systemPromptTemplate": "你当前扮演的角色是 {name}。你正在参与固定成员的群聊。根据公开记录判断你是否需要主动发言，只输出一个 <intent>N</intent> 标记，N 必须是 0 到 100 的整数。分数含义：0-20 没有需要补充的内容，保持沉默；21-40 可以回应但没有必要主动插话；41-60 有明确补充，视情况回应；61-80 应该回应；81-100 必须立即回应。分数不是自信度，而是此刻主动发言的必要性。"
+        }
+      },
+      {
+        "id": "cond_mentioned",
+        "type": "condition",
+        "config": {
+          "variable": "next_speaker",
+          "op": "notEmpty"
+        }
+      },
+      {
+        "id": "select_intent",
+        "type": "selectSpeaker",
+        "config": {
+          "source": "intent",
+          "threshold": 50,
+          "systemPromptTemplate": "你当前扮演的角色是 {{name}}。你正在参与固定成员的群聊。根据公开记录判断你是否需要主动发言，只输出一个 <intent>N</intent> 标记，N 必须是 0 到 100 的整数。分数含义：0-20 没有需要补充的内容，保持沉默；21-40 可以回应但没有必要主动插话；41-60 有明确补充，视情况回应；61-80 应该回应；81-100 必须立即回应。分数不是自信度，而是此刻主动发言的必要性。\n\n角色设定：\n{{character_prompt}}\n\n"
+        }
+      },
+      {
+        "id": "cond_intent",
+        "type": "condition",
+        "config": {
+          "variable": "next_speaker",
+          "op": "notEmpty"
+        }
+      },
+      {
+        "id": "gate_g",
+        "type": "condition",
+        "config": {
+          "variable": "has_tools",
+          "op": "equals",
+          "value": "true"
+        }
+      },
+      {
+        "id": "route_g",
+        "type": "route",
+        "config": {
+          "systemPromptTemplate": "你当前处于工具路由阶段，不是最终回答阶段。\n\n你的任务是判断用户的请求是否需要调用任何可用工具。\n\n规则：\n\n1. 如果不需要工具，在 content 字段中给出一句简洁的内部决策理由。\n2. 理由不超过 50 个字。\n3. 如果需要工具，在同一条响应中使用原生 tool_calls 发起调用，并在 content 中放一句简洁的自然语言决策理由。\n4. 不要把工具参数编码成 JSON 放进 content，不要在理由中罗列参数值，也不要在此阶段回答用户。\n5. 决策理由仅用于内部诊断，它不是最终答案，绝不能作为最终回复呈现给用户。\n6. 此阶段不要回答用户，也不要进行角色扮演。\n7. 必要的工具调用完成后，结束本路由阶段。将由另一次独立的模型调用生成面向用户的最终回答。"
+        }
+      },
+      {
+        "id": "cond_pending_g",
+        "type": "condition",
+        "config": {
+          "variable": "pending_tool_calls",
+          "op": "equals",
+          "value": "true"
+        }
+      },
+      {
+        "id": "tools_g",
+        "type": "executeTools",
+        "config": {}
+      },
+      {
+        "id": "cond_executed_g",
+        "type": "condition",
+        "config": {
+          "variable": "tools_executed",
+          "op": "equals",
+          "value": "true"
+        }
+      },
+      {
+        "id": "digest_g",
+        "type": "llm",
+        "config": {
+          "systemPromptTemplate": "你是资料整理员。用户输入之后是助手为回答该输入而收集的全部工具查询记录（调用参数与返回结果）。\n请把记录中与回答用户输入相关的信息提取为中文要点清单：\n- 逐条列出，保留回答所需的全部具体事实（名称、数值、时间、关系等），不要泛化或改写。\n- 每条要点末尾用括号标注来源（工具名与条目标题）。\n- 只整理记录中实际存在的内容；记录里没有的信息不要补充、不要推测。\n- 与用户输入无关的内容直接略去；没有任何相关信息时只输出「无相关资料」。",
+          "userTemplate": "用户输入：{{last_user}}\n\n工具查询记录：\n{{tool_trace}}",
+          "outputVariable": "evidence"
+        }
+      },
+      {
+        "id": "answer_g",
+        "type": "finalAnswer",
+        "config": {
+          "systemPromptTemplate": "{{character_prompt}}\n\n{{history_summary}}\n\n{{history_omitted}}\n\n{{state_card}}\n\n{{memory}}\n\n{{evidence}}\n\n"
+        }
+      },
+      {
+        "id": "gate_back",
+        "type": "condition",
+        "config": {
+          "variable": "participant_count",
+          "op": "gt",
+          "value": "1"
+        }
+      },
+      {
+        "id": "n-mvxay0po-e818",
+        "type": "display",
+        "config": {}
+      },
+      {
+        "id": "n-mvxayuf9-rpz0",
+        "type": "display",
+        "config": {}
+      },
+      {
+        "id": "n-mvxaz9rn-mojq",
+        "type": "display",
+        "config": {}
+      },
+      {
+        "id": "n-mvxazm51-p7r2",
+        "type": "display",
+        "config": {}
+      },
+      {
+        "id": "n-mvxm6xfi-efqb",
+        "type": "display",
+        "config": {}
+      },
+      {
+        "id": "n-mvxm7e4m-ospm",
+        "type": "display",
+        "config": {}
+      },
+      {
+        "id": "n-mvxma4uz-x3qb",
+        "type": "display",
+        "config": {}
+      },
+      {
+        "id": "n-mvxmhkd2-w4i3",
+        "type": "display",
+        "config": {}
+      },
+      {
+        "id": "n-mvxxqs5h-h7ns",
+        "type": "display",
+        "config": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "cond_solo",
+        "to": "gate_s",
+        "branch": "true",
+        "toSide": "top"
+      },
+      {
+        "from": "cond_solo",
+        "to": "select_mentioned",
+        "branch": "false",
+        "toSide": "left"
+      },
+      {
+        "from": "gate_s",
+        "to": "route_s",
+        "branch": "true",
+        "toSide": "top"
+      },
+      {
+        "from": "cond_pending_s",
+        "to": "cond_executed_s",
+        "branch": "false",
+        "toSide": "top"
+      },
+      {
+        "from": "cond_executed_s",
+        "to": "answer_s",
+        "branch": "false",
+        "toSide": "top"
+      },
+      {
+        "from": "gate_g",
+        "to": "answer_g",
+        "branch": "false",
+        "toSide": "top"
+      },
+      {
+        "from": "cond_executed_g",
+        "to": "digest_g",
+        "branch": "true",
+        "toSide": "top"
+      },
+      {
+        "from": "input",
+        "to": "cond_solo",
+        "fromSide": "bottom",
+        "toSide": "top"
+      },
+      {
+        "from": "gate_s",
+        "to": "answer_s",
+        "branch": "false",
+        "toSide": "right"
+      },
+      {
+        "from": "cond_mentioned",
+        "to": "gate_g",
+        "branch": "true",
+        "toSide": "top"
+      },
+      {
+        "from": "cond_intent",
+        "to": "gate_g",
+        "branch": "true",
+        "toSide": "right"
+      },
+      {
+        "from": "digest_g",
+        "to": "answer_g",
+        "fromSide": "right",
+        "toSide": "left"
+      },
+      {
+        "from": "cond_executed_g",
+        "to": "answer_g",
+        "branch": "false",
+        "toSide": "left"
+      },
+      {
+        "from": "n-mvxay0po-e818",
+        "to": "route_s",
+        "fromSide": "right",
+        "toSide": "left"
+      },
+      {
+        "from": "tools_s",
+        "to": "n-mvxay0po-e818",
+        "fromSide": "top",
+        "toSide": "bottom"
+      },
+      {
+        "from": "route_s",
+        "to": "n-mvxayuf9-rpz0",
+        "fromSide": "bottom",
+        "toSide": "top"
+      },
+      {
+        "from": "n-mvxayuf9-rpz0",
+        "to": "cond_pending_s",
+        "fromSide": "bottom",
+        "toSide": "right"
+      },
+      {
+        "from": "digest_s",
+        "to": "n-mvxaz9rn-mojq",
+        "fromSide": "right",
+        "toSide": "left"
+      },
+      {
+        "from": "n-mvxaz9rn-mojq",
+        "to": "answer_s",
+        "fromSide": "right",
+        "toSide": "left"
+      },
+      {
+        "from": "answer_s",
+        "to": "n-mvxazm51-p7r2",
+        "fromSide": "bottom",
+        "toSide": "top"
+      },
+      {
+        "from": "gate_back",
+        "to": "select_mentioned",
+        "branch": "true",
+        "toSide": "right"
+      },
+      {
+        "from": "cond_mentioned",
+        "to": "select_intent",
+        "branch": "false",
+        "toSide": "left"
+      },
+      {
+        "from": "select_intent",
+        "to": "n-mvxm6xfi-efqb",
+        "fromSide": "right",
+        "toSide": "top"
+      },
+      {
+        "from": "n-mvxm6xfi-efqb",
+        "to": "cond_intent",
+        "fromSide": "bottom",
+        "toSide": "right"
+      },
+      {
+        "from": "select_mentioned",
+        "to": "n-mvxm7e4m-ospm",
+        "fromSide": "bottom",
+        "toSide": "top"
+      },
+      {
+        "from": "n-mvxm7e4m-ospm",
+        "to": "cond_mentioned",
+        "fromSide": "right",
+        "toSide": "left"
+      },
+      {
+        "from": "gate_g",
+        "to": "route_g",
+        "branch": "true",
+        "toSide": "top"
+      },
+      {
+        "from": "cond_pending_g",
+        "to": "tools_g",
+        "branch": "true",
+        "toSide": "right"
+      },
+      {
+        "from": "route_g",
+        "to": "n-mvxmhkd2-w4i3",
+        "fromSide": "right",
+        "toSide": "left"
+      },
+      {
+        "from": "cond_executed_s",
+        "to": "digest_s",
+        "branch": "true",
+        "toSide": "right"
+      },
+      {
+        "from": "cond_pending_s",
+        "to": "tools_s",
+        "branch": "true",
+        "toSide": "bottom"
+      },
+      {
+        "from": "n-mvxmhkd2-w4i3",
+        "to": "cond_pending_g",
+        "fromSide": "bottom",
+        "toSide": "top"
+      },
+      {
+        "from": "tools_g",
+        "to": "n-mvxma4uz-x3qb",
+        "fromSide": "left",
+        "toSide": "bottom"
+      },
+      {
+        "from": "n-mvxma4uz-x3qb",
+        "to": "route_g",
+        "fromSide": "top",
+        "toSide": "bottom"
+      },
+      {
+        "from": "cond_pending_g",
+        "to": "cond_executed_g",
+        "branch": "false",
+        "toSide": "left"
+      },
+      {
+        "from": "answer_g",
+        "to": "n-mvxxqs5h-h7ns",
+        "fromSide": "right",
+        "toSide": "left"
+      },
+      {
+        "from": "n-mvxxqs5h-h7ns",
+        "to": "gate_back",
+        "fromSide": "right",
+        "toSide": "right"
+      }
+    ],
+    "layout": {
+      "input": {
+        "x": 1376,
+        "y": 2568,
+        "width": 320
+      },
+      "cond_solo": {
+        "x": 1376,
+        "y": 2968,
+        "width": 320,
+        "height": 131
+      },
+      "gate_s": {
+        "x": 1088,
+        "y": 3192,
+        "width": 280
+      },
+      "route_s": {
+        "x": 752,
+        "y": 3392,
+        "width": 280
+      },
+      "cond_pending_s": {
+        "x": 432,
+        "y": 3792,
+        "width": 280
+      },
+      "tools_s": {
+        "x": 296,
+        "y": 3632,
+        "width": 240
+      },
+      "cond_executed_s": {
+        "x": 672,
+        "y": 3968,
+        "width": 280
+      },
+      "digest_s": {
+        "x": 208,
+        "y": 3984,
+        "width": 280
+      },
+      "answer_s": {
+        "x": 856,
+        "y": 4168,
+        "width": 280
+      },
+      "select_mentioned": {
+        "x": 1712,
+        "y": 3192,
+        "width": 280
+      },
+      "cond_mentioned": {
+        "x": 1920,
+        "y": 3472,
+        "width": 280
+      },
+      "select_intent": {
+        "x": 2312,
+        "y": 3496,
+        "width": 280
+      },
+      "cond_intent": {
+        "x": 2320,
+        "y": 3960,
+        "width": 280
+      },
+      "gate_g": {
+        "x": 1656,
+        "y": 3776,
+        "width": 280
+      },
+      "route_g": {
+        "x": 1464,
+        "y": 4064,
+        "width": 280
+      },
+      "cond_pending_g": {
+        "x": 1896,
+        "y": 4336,
+        "width": 280
+      },
+      "tools_g": {
+        "x": 1632,
+        "y": 4520,
+        "width": 240
+      },
+      "cond_executed_g": {
+        "x": 2160,
+        "y": 4480,
+        "width": 280
+      },
+      "digest_g": {
+        "x": 2160,
+        "y": 4696,
+        "width": 280
+      },
+      "answer_g": {
+        "x": 2744,
+        "y": 4488,
+        "width": 280
+      },
+      "gate_back": {
+        "x": 3200,
+        "y": 4424,
+        "width": 280
+      },
+      "n-mvxay0po-e818": {
+        "x": 392,
+        "y": 3400,
+        "width": 240
+      },
+      "n-mvxayuf9-rpz0": {
+        "x": 752,
+        "y": 3584,
+        "width": 280,
+        "height": 153
+      },
+      "n-mvxaz9rn-mojq": {
+        "x": 552,
+        "y": 4288,
+        "width": 240
+      },
+      "n-mvxazm51-p7r2": {
+        "x": 864,
+        "y": 4592,
+        "width": 264,
+        "height": 153
+      },
+      "n-mvxm6xfi-efqb": {
+        "x": 2696,
+        "y": 3800,
+        "width": 240
+      },
+      "n-mvxm7e4m-ospm": {
+        "x": 1536,
+        "y": 3432,
+        "width": 272,
+        "height": 160
+      },
+      "n-mvxma4uz-x3qb": {
+        "x": 1360,
+        "y": 4328,
+        "width": 240
+      },
+      "n-mvxmhkd2-w4i3": {
+        "x": 1920,
+        "y": 4088,
+        "width": 256,
+        "height": 176
+      },
+      "n-mvxxqs5h-h7ns": {
+        "x": 3144,
+        "y": 4640,
+        "width": 240
+      }
+    }
+  }
+}
