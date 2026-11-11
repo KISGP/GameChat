@@ -1,7 +1,7 @@
-# WuWaChat 打包配置：产物形态由本应用声明，标准主进程只消费。
+# wuwachat 打包配置：产物形态由本应用声明，标准主进程只消费。
 # appId 必须与 src/main/index.ts 的 startChatAppMain appId 一致（AUMI 与系统通知归属）。
 appId: com.wuwachat
-productName: WuWaChat
+productName: wuwachat
 
 directories:
   output: dist

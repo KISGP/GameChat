@@ -18,7 +18,7 @@
 | `packages/schema` | `@gamechat/schema` | L0 共享逻辑 | 作用于上述类型的纯函数与常量：默认值、归一化、工厂、选项清单、插值、消息切分、表情标记 |
 | `packages/core` | `@gamechat/core` | L1 核心 | 聊天运行时、Agent 工具契约、角色/记忆服务、设置引擎、world 检索、infra 原语 |
 | `packages/electron` | `@gamechat/electron` | L2 Electron 实现层 | 壳原语（主窗口、托盘、IPC 广播、日志化 handler、updater 控制器）与标准聊天应用主进程：`src/main`（域服务、IPC 通道、生命周期）、`src/preload`（桥接层） |
-| `apps/wuwachat` | `@gamechat/wuwachat` | L3 应用 | renderer（`src/renderer`）、编排窗口渲染入口（`src/agent-lab`，与 renderer 平级）、两个薄入口文件与身份配置；主进程与 preload 直接消费 `@gamechat/electron` |
+| `apps/wuwachat` | `wuwachat` | L3 应用 | renderer（`src/renderer`）、编排窗口渲染入口（`src/agent-lab`，与 renderer 平级）、两个薄入口文件与身份配置；主进程与 preload 直接消费 `@gamechat/electron` |
 
 **落点判定三问**（新文件或新能力进哪个包，按序回答）：
 
@@ -50,8 +50,8 @@
 
 - 安装依赖：`npm install`（`.npmrc` 已把 Electron 与 electron-builder 二进制指向 npmmirror 镜像）。
 - 检查：`npm run typecheck`（workspaces 遍历，新包带同名脚本自动纳入）与 `npm run lint`（显式 glob 见根 package.json，新包需手动追加）。
-- 开发：`npm run dev --workspace @gamechat/wuwachat`；构建：`npm run build --workspace @gamechat/wuwachat`（仅产出 out/）。
-- 打包：`npm run dist`（根入口，产出 NSIS 安装包与 latest.yml）；目录产物验证用 `npm run pack --workspace @gamechat/wuwachat`。
+- 开发：`npm run dev --workspace wuwachat`；构建：`npm run build --workspace wuwachat`（仅产出 out/）。
+- 打包：`npm run dist`（根入口，产出 NSIS 安装包与 latest.yml）；目录产物验证用 `npm run pack --workspace wuwachat`。
 - 发版预演：`npm run verify`（typecheck + 完整打包一步完成，与远端发版链同构）；release 提交前本地跑绿再推送。
 
 ## 各层契约文档

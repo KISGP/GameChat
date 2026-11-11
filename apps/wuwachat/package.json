@@ -1,8 +1,8 @@
 {
-  "name": "@gamechat/wuwachat",
+  "name": "wuwachat",
   "version": "0.1.0",
   "private": true,
-  "productName": "WuWaChat",
+  "productName": "wuwachat",
   "author": "KISGP",
   "description": "",
   "main": "out/main/index.js",

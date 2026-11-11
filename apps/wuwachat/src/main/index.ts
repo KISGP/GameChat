@@ -2,7 +2,7 @@ import { startChatAppMain } from '@gamechat/electron'
 
 startChatAppMain({
   appId: 'com.wuwachat',
-  productName: 'WuWaChat',
+  productName: 'wuwachat',
   window: {
     width: 1200,
     height: 720,

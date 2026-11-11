@@ -9,11 +9,11 @@
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint packages/core packages/electron packages/schema packages/type apps/wuwachat",
-    "dist": "npm run dist --workspace @gamechat/wuwachat",
-    "verify": "npm run typecheck && npm run dist --workspace @gamechat/wuwachat",
-    "version:patch": "echo '📦 升级补丁版本 (x.y.Z → x.y.Z+1)' && npm version patch --no-git-tag-version --workspace @gamechat/wuwachat",
-    "version:minor": "echo '📦 升级次版本 (x.Y.z → x.Y+1.z)' && npm version minor --no-git-tag-version --workspace @gamechat/wuwachat",
-    "version:major": "echo '📦 升级主版本 (x.Y.z → X+1.Y.z)' && npm version major --no-git-tag-version --workspace @gamechat/wuwachat",
+    "dist": "npm run dist --workspace wuwachat",
+    "verify": "npm run typecheck && npm run dist --workspace wuwachat",
+    "version:patch": "echo '📦 升级补丁版本 (x.y.Z → x.y.Z+1)' && npm version patch --no-git-tag-version --workspace wuwachat",
+    "version:minor": "echo '📦 升级次版本 (x.Y.z → x.Y+1.z)' && npm version minor --no-git-tag-version --workspace wuwachat",
+    "version:major": "echo '📦 升级主版本 (x.Y.z → X+1.Y.z)' && npm version major --no-git-tag-version --workspace wuwachat",
     "prepare": "git config core.hooksPath .githooks"
   },
   "engines": {

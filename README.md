@@ -38,13 +38,13 @@ npm install
 ### 启动开发环境
 
 ```bash
-npm run dev --workspace @gamechat/wuwachat
+npm run dev --workspace wuwachat
 ```
 
 ### 构建应用
 
 ```bash
-npm run build --workspace @gamechat/wuwachat
+npm run build --workspace wuwachat
 ```
 
 ### 打包安装包
@@ -56,7 +56,7 @@ npm run dist
 ## 项目结构
 
 ```text
-apps/wuwachat         WuWaChat 应用：界面渲染层、流程编排窗口与身份配置
+apps/wuwachat         wuwachat 应用：界面渲染层、流程编排窗口与身份配置
 packages/core         聊天运行时、Agent 工具、角色/记忆服务、设置引擎与检索
 packages/electron     Electron 实现层：标准主进程、IPC 域服务与 preload 桥
 packages/schema       跨进程契约的纯函数与常量：默认值、归一化、IPC 通道
